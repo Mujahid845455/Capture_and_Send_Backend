@@ -1,0 +1,15 @@
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+.env
+.git/
+.gitignore
+capture_sign.py
+training.py
+Procfile
+voice_*.mp3
+README.md

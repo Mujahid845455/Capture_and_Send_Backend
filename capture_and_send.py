@@ -530,9 +530,10 @@ MODEL_PATH = "models/asl_mediapipe_mlp_model.h5"
 LABELS_PATH = "models/class_labels.json"
 PORT = int(os.environ.get("PORT", 7001))
 
-# Production Security: Restrict CORS to your frontend URL
-# Set ALLOWED_ORIGINS in Render Dashboard (e.g., https://your-app.onrender.com)
-ALLOWED_ORIGINS = os.environ.get("ALLOWED_ORIGINS", "*")
+# Production Security: Restrict CORS to specific origins
+# Set ALLOWED_ORIGINS in Render Dashboard (e.g., https://your-frontend.onrender.com)
+RAW_ORIGINS = os.environ.get("ALLOWED_ORIGINS", "*")
+CORS_ORIGINS = [orig.strip() for orig in RAW_ORIGINS.split(",") if orig.strip()]
 
 # ================= LOAD MODEL & LABELS =================
 model = None
@@ -540,7 +541,7 @@ LABELS = ["A", "B", "C", "D", "nothing"]
 label_encoder = None
 
 if tf:
-    print("⏳ Loading AI Model...")
+    print("⏳ Loading AI Model for production...")
     try:
         if os.path.exists(LABELS_PATH):
             with open(LABELS_PATH, "r") as f:
@@ -551,9 +552,9 @@ if tf:
 
         if os.path.exists(MODEL_PATH):
             model = tf.keras.models.load_model(MODEL_PATH, compile=False)
-            print(f"✅ Model loaded: {MODEL_PATH}")
+            print(f"✅ Model loaded successfully: {MODEL_PATH}")
     except Exception as e:
-        print(f"❌ Error loading model: {e}")
+        print(f"❌ Critical error loading model: {e}")
 
 # ================= LOGIC STATE =================
 predicted_sentence = ""
@@ -564,19 +565,26 @@ stabilization_window = deque(maxlen=5)
 stabilization_threshold = 3
 
 # ================= SOCKET.IO SERVER =================
-# ping_timeout: How long the server waits for a heartbeat before disconnecting
-# ping_interval: How often the server sends a heartbeat
+# Optimized for Render: longer timeouts to handle cold starts or network fluctuations
 sio = socketio.Server(
-    cors_allowed_origins=ALLOWED_ORIGINS.split(","),
-    ping_timeout=60,
+    cors_allowed_origins=CORS_ORIGINS,
+    ping_timeout=120,
     ping_interval=25,
-    async_mode='eventlet'
+    async_mode='eventlet',
+    logger=True, # Enable internal logging for debugging
+    engineio_logger=True
 )
 
 # Standard Flask-like health check for Render
 def health_check(environ, start_response):
-    start_response('200 OK', [('Content-Type', 'text/plain')])
-    return [b"OK - Prediction Server is Alive"]
+    start_response('200 OK', [('Content-Type', 'application/json')])
+    status = {
+        "status": "alive",
+        "model_loaded": model is not None,
+        "labels_count": len(LABELS),
+        "timestamp": time.time()
+    }
+    return [json.dumps(status).encode('utf-8')]
 
 # Wrap the Socket.IO app
 socket_app = socketio.WSGIApp(sio)
