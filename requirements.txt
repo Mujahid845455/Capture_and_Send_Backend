@@ -1,5 +1,9 @@
-opencv-python
-mediapipe
 python-socketio
+eventlet
+gunicorn
 python-dotenv
+numpy
 tensorflow
+scikit-learn
+mediapipe
+opencv-python
